@@ -1,6 +1,7 @@
 #include "kopt/filter.hpp"
 
 #include "kopt/convolution.hpp"
+#include "kopt/utils.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -19,8 +20,11 @@ constexpr float kDefaultKernel[25] = {
     4.0f / 273.0f,  7.0f / 273.0f,  4.0f / 273.0f,  1.0f / 273.0f,
 };
 
-constexpr float kBoxKernel[25] = {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1};
-
+constexpr float kBoxKernel[25] = {1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f,
+                                  1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f,
+                                  1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f,
+                                  1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f,
+                                  1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f, 1.0f / 25.0f};
 void validate_view(ImageViewU8 view, const char* name) {
     if (view.data == nullptr) {
         throw std::invalid_argument(std::string(name) + ".data is null");
@@ -44,7 +48,7 @@ void validate_same_shape(ImageViewU8 input, MutableImageViewU8 output, const cha
 }
 
 std::uint8_t to_u8(float value) {
-    const float scaled = std::round(std::clamp(value, 0.0f, 1.0f) * 255.0f);
+    const float scaled = std::round(std::clamp(value, 0.0f, 255.0f));
     return static_cast<std::uint8_t>(scaled);
 }
 
@@ -101,6 +105,8 @@ class FilterEngine::Impl {
     }
 
     void write_outputs(ImageViewU8 input, MutableImageViewU8 lpf_output, MutableImageViewU8 hpf_output) {
+        // save_image(input.data, input.width, input.height, "inputSave.png");
+        // save_image(lpf_pixels_.data(), lpf_output.width, lpf_output.height, "lpfSaveBefore.png");
         for (int y = 0; y < input.height; ++y) {
             auto* lpf_row = lpf_output.data + static_cast<std::ptrdiff_t>(y) * lpf_output.stride_bytes;
             auto* hpf_row = hpf_output.data + static_cast<std::ptrdiff_t>(y) * hpf_output.stride_bytes;
@@ -111,6 +117,9 @@ class FilterEngine::Impl {
                 hpf_row[x] = to_u8(input_pixels_[index] - lpf + 0.5f);
             }
         }
+
+        // save_image(lpf_output.data, lpf_output.width, lpf_output.height, "lpfSave.png");
+        // save_image(hpf_output.data, hpf_output.width, hpf_output.height, "hpfSave.png");
     }
 
     [[nodiscard]] ConstImageView input_view() const noexcept {

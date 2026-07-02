@@ -15,7 +15,7 @@
 namespace kopt {
 
 void convolve5x5_cpu(ConstImageView input, ImageView output, const float kernel[25]) {
-    save_image(input.data, input.width, input.height, "inputconv.png");
+    // save_image(input.data, input.width, input.height, "inputconv.png");
     for (int y = 0; y < input.height; ++y) {
         for (int x = 0; x < input.width; ++x) {
             float sum = 0.0f;

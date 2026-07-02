@@ -67,7 +67,7 @@ int main(int argc, char** argv) {
                       << "x" << height << "\n";
         }
 
-        kopt::save_image(input_pixels, width, height, "input.png");
+        // kopt::save_image(input_pixels, width, height, "input.png");
 
         std::vector<std::uint8_t> lpf_pixels(input_pixels.size());
         std::vector<std::uint8_t> hpf_pixels(input_pixels.size());
@@ -78,8 +78,8 @@ int main(int argc, char** argv) {
         engine.init({backend, 2});
         engine.setup(width, height);
         engine.run(input, lpf_output, hpf_output);
-        kopt::save_image(lpf_pixels, width, height, "lpf.png");
-        kopt::save_image(hpf_pixels, width, height, "hpf.png");
+        // kopt::save_image(lpf_pixels, width, height, "lpf.png");
+        // kopt::save_image(hpf_pixels, width, height, "hpf.png");
         std::chrono::duration<double, std::milli> TotalElapsed = std::chrono::duration<double, std::milli>(0);
         // for (int i = 0; i < iterations; ++i) {
         //     const auto start = std::chrono::steady_clock::now();
@@ -96,8 +96,8 @@ int main(int argc, char** argv) {
         std::cout << "lpf_sample=" << static_cast<int>(lpf_pixels[lpf_pixels.size() / 2]) << "\n";
         std::cout << "hpf_sample=" << static_cast<int>(hpf_pixels[hpf_pixels.size() / 2]) << "\n";
 
-        kopt::save_image(lpf_pixels, width, height, "lpf.png");
-        kopt::save_image(hpf_pixels, width, height, "hpf.png");
+        // kopt::save_image(lpf_pixels, width, height, "lpf.png");
+        // kopt::save_image(hpf_pixels, width, height, "hpf.png");
     } catch (const std::exception& error) {
         std::cerr << "error: " << error.what() << "\n";
         return 1;
