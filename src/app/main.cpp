@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 
+#include <opencv2/core.hpp>
+
 namespace {
 
 void print_usage(const char* program) {
@@ -45,6 +47,8 @@ const char* backend_name(kopt::Backend backend) {
 } // namespace
 
 int main(int argc, char** argv) {
+    cv::setNumThreads(1);
+
     if (argc < 3 || argc > 4) {
         print_usage(argv[0]);
         return 1;
@@ -78,16 +82,16 @@ int main(int argc, char** argv) {
         engine.init({backend, 2});
         engine.setup(width, height);
         engine.run(input, lpf_output, hpf_output);
-        // kopt::save_image(lpf_pixels, width, height, "lpf.png");
-        // kopt::save_image(hpf_pixels, width, height, "hpf.png");
+        kopt::save_image(lpf_pixels, width, height, "lpf.png");
+        kopt::save_image(hpf_pixels, width, height, "hpf.png");
         std::chrono::duration<double, std::milli> TotalElapsed = std::chrono::duration<double, std::milli>(0);
-        // for (int i = 0; i < iterations; ++i) {
-        //     const auto start = std::chrono::steady_clock::now();
-        //     engine.run(input, lpf_output, hpf_output);
-        //     const auto end = std::chrono::steady_clock::now();
-        //     const auto elapsed = std::chrono::duration<double, std::milli>(end - start);
-        //     TotalElapsed += elapsed;
-        // }
+        for (int i = 0; i < iterations; ++i) {
+            const auto start = std::chrono::steady_clock::now();
+            engine.run(input, lpf_output, hpf_output);
+            const auto end = std::chrono::steady_clock::now();
+            const auto elapsed = std::chrono::duration<double, std::milli>(end - start);
+            TotalElapsed += elapsed;
+        }
 
         std::cout << "backend=" << backend_name(engine.active_backend()) << "\n";
         std::cout << "iterations=" << iterations << "\n";

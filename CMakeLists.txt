@@ -8,6 +8,21 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(KOPT_BUILD_CUDA "Build CUDA convolution library" ON)
 
+add_library(kopt_release_options INTERFACE)
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    target_compile_options(kopt_release_options
+        INTERFACE
+            $<$<CONFIG:Release>:-O3>
+            $<$<CONFIG:Release>:-march=native>
+    )
+elseif(MSVC)
+    target_compile_options(kopt_release_options
+        INTERFACE
+            $<$<CONFIG:Release>:/O2>
+            $<$<CONFIG:Release>:/arch:AVX512>
+    )
+endif()
+
 find_package(OpenCV 4.6 REQUIRED COMPONENTS core imgcodecs imgproc)
 
 add_library(kopt_cpu
@@ -21,6 +36,8 @@ target_include_directories(kopt_cpu
 target_link_libraries(kopt_cpu
     PUBLIC
         ${OpenCV_LIBS}
+    PRIVATE
+        kopt_release_options
 )
 
 if(KOPT_BUILD_CUDA)
@@ -51,6 +68,8 @@ target_include_directories(kopt_filter
 target_link_libraries(kopt_filter
     PUBLIC
         kopt_cpu
+    PRIVATE
+        kopt_release_options
 )
 if(KOPT_BUILD_CUDA)
     target_link_libraries(kopt_filter PUBLIC kopt_cuda)
@@ -71,6 +90,7 @@ target_include_directories(kopt_bench
 target_link_libraries(kopt_bench
     PRIVATE
         kopt_filter
+        kopt_release_options
         ${OpenCV_LIBS}
 )
 
