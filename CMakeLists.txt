@@ -61,6 +61,7 @@ endif()
 add_executable(kopt_bench
     src/app/main.cpp
     src/app/image_io.cpp
+    src/app/utils.cpp
 )
 target_include_directories(kopt_bench
     PRIVATE

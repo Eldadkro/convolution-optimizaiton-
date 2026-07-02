@@ -95,7 +95,7 @@ class FilterEngine::Impl {
         for (int y = 0; y < input.height; ++y) {
             const auto* row = input.data + static_cast<std::ptrdiff_t>(y) * input.stride_bytes;
             for (int x = 0; x < input.width; ++x) {
-                input_pixels_[static_cast<std::size_t>(y) * input.width + x] = static_cast<Pixel>(row[x]) / 255.0f;
+                input_pixels_[static_cast<std::size_t>(y) * input.width + x] = static_cast<Pixel>(row[x]);
             }
         }
     }
