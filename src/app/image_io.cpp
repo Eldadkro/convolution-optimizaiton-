@@ -1,9 +1,11 @@
 #include "kopt/image_io.hpp"
 
+#include <cstdint>
 #include <opencv2/imgcodecs.hpp>
 
 #include <algorithm>
 #include <stdexcept>
+#include <vector>
 
 namespace kopt {
 
@@ -23,13 +25,8 @@ std::vector<std::uint8_t> read_grayscale_image_u8(const std::string& path, int& 
         return {image.data, image.data + image.total()};
     }
 
-    std::vector<std::uint8_t> pixels(static_cast<std::size_t>(width) * height);
-    for (int y = 0; y < height; ++y) {
-        const auto* source_row = image.ptr<std::uint8_t>(y);
-        auto* target_row = pixels.data() + static_cast<std::size_t>(y) * width;
-        std::copy(source_row, source_row + width, target_row);
-    }
-    return pixels;
+    throw std::runtime_error("image isn't Continuous");
+    return std::vector<uint8_t>();
 }
 
 }  // namespace kopt

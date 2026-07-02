@@ -70,7 +70,9 @@ int main(int argc, char** argv) {
         const kopt::ImageViewU8 input{input_pixels.data(), width, height, width};
         const kopt::MutableImageViewU8 lpf_output{lpf_pixels.data(), width, height, width};
         const kopt::MutableImageViewU8 hpf_output{hpf_pixels.data(), width, height, width};
-        kopt::FilterEngine engine({backend, 2});
+        kopt::FilterEngine engine;
+        engine.init({backend, 2});
+        engine.setup(width, height);
 
         const auto start = std::chrono::steady_clock::now();
         for (int i = 0; i < iterations; ++i) {

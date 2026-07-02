@@ -33,7 +33,8 @@ struct FilterConfig {
 
 class FilterEngine {
 public:
-    explicit FilterEngine(FilterConfig config = {});
+    FilterEngine();
+    explicit FilterEngine(FilterConfig config);
     ~FilterEngine();
 
     FilterEngine(FilterEngine&&) noexcept;
@@ -42,9 +43,13 @@ public:
     FilterEngine(const FilterEngine&) = delete;
     FilterEngine& operator=(const FilterEngine&) = delete;
 
+    void init(FilterConfig config = {});
+    void setup(int width, int height);
     void run(ImageViewU8 input, MutableImageViewU8 lpf_output, MutableImageViewU8 hpf_output);
 
     [[nodiscard]] Backend active_backend() const noexcept;
+    [[nodiscard]] bool is_initialized() const noexcept;
+    [[nodiscard]] bool is_setup() const noexcept;
 
 private:
     class Impl;
