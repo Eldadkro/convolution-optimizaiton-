@@ -50,6 +50,11 @@ public:
 
 private:
   class Impl;
+
+  friend class CpuImpl;
+  friend class CudaImpl;
+  friend std::unique_ptr<Impl> make_impl(FilterConfig config);
+
   std::unique_ptr<Impl> impl_;
 };
 

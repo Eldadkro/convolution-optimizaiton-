@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -57,26 +58,9 @@ std::uint8_t to_u8(float value) {
 
 class FilterEngine::Impl {
 public:
-  Impl() = default;
-
-  void init(FilterConfig config) {
-    config_ = config;
-    if (config_.radius != kKernelRadius) {
-      throw std::invalid_argument("only radius 2 is supported");
-    }
-    active_backend_ = resolve_backend(config.backend);
-    initialized_ = true;
-    setup_ = false;
-    width_ = 0;
-    height_ = 0;
-    input_pixels_.clear();
-    lpf_pixels_.clear();
-  }
+  virtual ~Impl() = default;
 
   void setup(int width, int height) {
-    if (!initialized_) {
-      throw std::logic_error("FilterEngine must be initialized before setup");
-    }
     if (width <= 0 || height <= 0) {
       throw std::invalid_argument("setup dimensions must be positive");
     }
@@ -89,11 +73,16 @@ public:
     setup_ = true;
   }
 
-  void run(ImageViewU8 input, MutableImageViewU8 lpf_output,
-           MutableImageViewU8 hpf_output) {
-    if (!initialized_) {
-      throw std::logic_error("FilterEngine is not initialized");
-    }
+  virtual void run(ImageViewU8 input, MutableImageViewU8 lpf_output,
+                   MutableImageViewU8 hpf_output) = 0;
+
+  [[nodiscard]] virtual Backend active_backend() const noexcept = 0;
+
+  [[nodiscard]] bool is_setup() const noexcept { return setup_; }
+
+protected:
+  void prepare_run(ImageViewU8 input, MutableImageViewU8 lpf_output,
+                   MutableImageViewU8 hpf_output) {
     validate_view(input, "input");
     validate_view(lpf_output, "lpf_output");
     validate_view(hpf_output, "hpf_output");
@@ -107,7 +96,9 @@ public:
       throw std::invalid_argument(
           "input dimensions do not match FilterEngine setup");
     }
+  }
 
+  void copy_input(ImageViewU8 input) {
     for (int y = 0; y < input.height; ++y) {
       const auto *row =
           input.data + static_cast<std::ptrdiff_t>(y) * input.stride_bytes;
@@ -116,24 +107,10 @@ public:
             static_cast<Pixel>(row[x]) / 255.0f;
       }
     }
+  }
 
-    const ConstImageView input_view{input_pixels_.data(), input.width,
-                                    input.height, input.width};
-    const ImageView lpf_view{lpf_pixels_.data(), input.width, input.height,
-                             input.width};
-
-    if (active_backend_ == Backend::Cpu) {
-      convolve5x5_cpu(input_view, lpf_view, kDefaultKernel);
-    } else if (active_backend_ == Backend::Cuda) {
-#if KOPT_WITH_CUDA
-      convolve5x5_cuda(input_view, lpf_view, kDefaultKernel);
-#else
-      throw std::runtime_error("CUDA backend was not built");
-#endif
-    } else {
-      throw std::runtime_error("unresolved filter backend");
-    }
-
+  void write_outputs(ImageViewU8 input, MutableImageViewU8 lpf_output,
+                     MutableImageViewU8 hpf_output) {
     for (int y = 0; y < input.height; ++y) {
       auto *lpf_row = lpf_output.data +
                       static_cast<std::ptrdiff_t>(y) * lpf_output.stride_bytes;
@@ -148,29 +125,15 @@ public:
     }
   }
 
-  [[nodiscard]] Backend active_backend() const noexcept {
-    return active_backend_;
+  [[nodiscard]] ConstImageView input_view() const noexcept {
+    return {input_pixels_.data(), width_, height_, width_};
   }
 
-  [[nodiscard]] bool is_initialized() const noexcept { return initialized_; }
-
-  [[nodiscard]] bool is_setup() const noexcept { return setup_; }
+  [[nodiscard]] ImageView lpf_view() noexcept {
+    return {lpf_pixels_.data(), width_, height_, width_};
+  }
 
 private:
-  static Backend resolve_backend(Backend requested) {
-    if (requested == Backend::Auto) {
-#if KOPT_WITH_CUDA
-      return Backend::Cuda;
-#else
-      return Backend::Cpu;
-#endif
-    }
-    return requested;
-  }
-
-  FilterConfig config_{};
-  Backend active_backend_ = Backend::Auto;
-  bool initialized_ = false;
   bool setup_ = false;
   int width_ = 0;
   int height_ = 0;
@@ -178,7 +141,71 @@ private:
   std::vector<Pixel> lpf_pixels_;
 };
 
-FilterEngine::FilterEngine() : impl_(std::make_unique<Impl>()) {}
+class CpuImpl final : public FilterEngine::Impl {
+public:
+  void run(ImageViewU8 input, MutableImageViewU8 lpf_output,
+           MutableImageViewU8 hpf_output) override {
+    prepare_run(input, lpf_output, hpf_output);
+    copy_input(input);
+    convolve5x5_cpu(input_view(), lpf_view(), kDefaultKernel);
+    write_outputs(input, lpf_output, hpf_output);
+  }
+
+  [[nodiscard]] Backend active_backend() const noexcept override {
+    return Backend::Cpu;
+  }
+};
+
+#if KOPT_WITH_CUDA
+class CudaImpl final : public FilterEngine::Impl {
+public:
+  void run(ImageViewU8 input, MutableImageViewU8 lpf_output,
+           MutableImageViewU8 hpf_output) override {
+    prepare_run(input, lpf_output, hpf_output);
+    copy_input(input);
+    convolve5x5_cuda(input_view(), lpf_view(), kDefaultKernel);
+    write_outputs(input, lpf_output, hpf_output);
+  }
+
+  [[nodiscard]] Backend active_backend() const noexcept override {
+    return Backend::Cuda;
+  }
+};
+#endif
+
+Backend resolve_backend(Backend requested) {
+  if (requested == Backend::Auto) {
+#if KOPT_WITH_CUDA
+    return Backend::Cuda;
+#else
+    return Backend::Cpu;
+#endif
+  }
+  return requested;
+}
+
+std::unique_ptr<FilterEngine::Impl> make_impl(FilterConfig config) {
+  if (config.radius != kKernelRadius) {
+    throw std::invalid_argument("only radius 2 is supported");
+  }
+
+  switch (resolve_backend(config.backend)) {
+  case Backend::Cpu:
+    return std::make_unique<CpuImpl>();
+  case Backend::Cuda:
+#if KOPT_WITH_CUDA
+    return std::make_unique<CudaImpl>();
+#else
+    throw std::runtime_error("CUDA backend was not built");
+#endif
+  case Backend::Auto:
+    break;
+  }
+
+  throw std::runtime_error("unresolved filter backend");
+}
+
+FilterEngine::FilterEngine() = default;
 
 FilterEngine::FilterEngine(FilterConfig config) : FilterEngine() {
   init(config);
@@ -190,23 +217,36 @@ FilterEngine::FilterEngine(FilterEngine &&) noexcept = default;
 
 FilterEngine &FilterEngine::operator=(FilterEngine &&) noexcept = default;
 
-void FilterEngine::init(FilterConfig config) { impl_->init(config); }
+void FilterEngine::init(FilterConfig config) { impl_ = make_impl(config); }
 
-void FilterEngine::setup(int width, int height) { impl_->setup(width, height); }
+void FilterEngine::setup(int width, int height) {
+  if (impl_ == nullptr) {
+    throw std::logic_error("FilterEngine must be initialized before setup");
+  }
+  impl_->setup(width, height);
+}
 
 void FilterEngine::run(ImageViewU8 input, MutableImageViewU8 lpf_output,
                        MutableImageViewU8 hpf_output) {
+  if (impl_ == nullptr) {
+    throw std::logic_error("FilterEngine is not initialized");
+  }
   impl_->run(input, lpf_output, hpf_output);
 }
 
 Backend FilterEngine::active_backend() const noexcept {
+  if (impl_ == nullptr) {
+    return Backend::Auto;
+  }
   return impl_->active_backend();
 }
 
 bool FilterEngine::is_initialized() const noexcept {
-  return impl_->is_initialized();
+  return impl_ != nullptr;
 }
 
-bool FilterEngine::is_setup() const noexcept { return impl_->is_setup(); }
+bool FilterEngine::is_setup() const noexcept {
+  return impl_ != nullptr && impl_->is_setup();
+}
 
 } // namespace kopt
