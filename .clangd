@@ -2,7 +2,7 @@ CompileFlags:
   CompilationDatabase: build
   Add:
     - -std=c++17
-    - -Iinclude/
+    - -I/home/eldadk/projects/kernel-optimization/include
   Remove:
     - -W*
 
@@ -29,4 +29,4 @@ CompileFlags:
     - --cuda-gpu-arch=sm_75
     - -DKOPT_WITH_CUDA=1
     - -std=c++17
-    - -Iinclude/
+    - -I/home/eldadk/projects/kernel-optimization/include
