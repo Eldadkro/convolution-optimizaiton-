@@ -8,6 +8,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(KOPT_BUILD_CUDA "Build CUDA convolution library" ON)
 
+find_package(OpenCV 4.6 REQUIRED COMPONENTS core imgcodecs imgproc)
+
 add_library(kopt_cpu
     src/cpu/convolution.cpp
 )
@@ -34,20 +36,38 @@ if(KOPT_BUILD_CUDA)
     )
 endif()
 
+add_library(kopt_filter
+    src/filter.cpp
+)
+target_include_directories(kopt_filter
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+target_link_libraries(kopt_filter
+    PUBLIC
+        kopt_cpu
+)
+if(KOPT_BUILD_CUDA)
+    target_link_libraries(kopt_filter PUBLIC kopt_cuda)
+    target_compile_definitions(kopt_filter PRIVATE KOPT_WITH_CUDA=1)
+    set_target_properties(kopt_filter PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS OFF)
+endif()
+
 add_executable(kopt_bench
     src/app/main.cpp
-    src/app/pgm_image.cpp
+    src/app/image_io.cpp
 )
 target_include_directories(kopt_bench
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${OpenCV_INCLUDE_DIRS}
 )
 target_link_libraries(kopt_bench
     PRIVATE
-        kopt_cpu
+        kopt_filter
+        ${OpenCV_LIBS}
 )
 
 if(KOPT_BUILD_CUDA)
-    target_link_libraries(kopt_bench PRIVATE kopt_cuda)
     target_compile_definitions(kopt_bench PRIVATE KOPT_WITH_CUDA=1)
 endif()
