@@ -1,0 +1,30 @@
+CompileFlags:
+  CompilationDatabase: build
+  Add:
+    - -std=c++17
+    - -Iinclude/
+  Remove:
+    - -W*
+
+Diagnostics:
+  ClangTidy:
+    Add:
+      - bugprone-*
+      - performance-*
+      - readability-*
+    Remove:
+      - readability-magic-numbers
+      - readability-identifier-length
+
+Index:
+  Background: Build
+
+---
+If:
+  PathMatch: .*\.cu
+CompileFlags:
+  Add:
+    - -x
+    - cuda
+    - --cuda-gpu-arch=sm_75
+    - -DKOPT_WITH_CUDA=1
