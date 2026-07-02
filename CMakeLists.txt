@@ -16,6 +16,11 @@ add_library(kopt_cpu
 target_include_directories(kopt_cpu
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${OpenCV_INCLUDE_DIRS}
+)
+target_link_libraries(kopt_cpu
+    PUBLIC
+        ${OpenCV_LIBS}
 )
 
 if(KOPT_BUILD_CUDA)

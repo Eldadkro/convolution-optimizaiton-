@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <sys/types.h>
 
 namespace kopt {
 
@@ -27,6 +28,8 @@ struct ConstImageView {
 };
 
 void convolve5x5_cpu(ConstImageView input, ImageView output, const float kernel[25]);
+
+void convolve5x5_cpu_opencv(ConstImageView input, ImageView output, const float kernel[25]);
 
 void convolve5x5_cuda(ConstImageView input, ImageView output, const float kernel[25]);
 

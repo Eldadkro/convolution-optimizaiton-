@@ -1,4 +1,5 @@
 build-debug
 build-cpu
-build
+build*
 uv.lock
+results

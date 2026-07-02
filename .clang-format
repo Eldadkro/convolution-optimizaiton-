@@ -1,0 +1,53 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+Standard: c++17
+
+IndentWidth: 4
+ContinuationIndentWidth: 4
+TabWidth: 4
+UseTab: Never
+
+ColumnLimit: 120
+PointerAlignment: Left
+ReferenceAlignment: Left
+DerivePointerAlignment: false
+
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: false
+AlignConsecutiveDeclarations: false
+AllowShortFunctionsOnASingleLine: Empty
+BreakBeforeBraces: Attach
+NamespaceIndentation: None
+SpaceBeforeParens: ControlStatements
+SpacesInParentheses: false
+
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+
+---
+# Language: CUDA
+# BasedOnStyle: LLVM
+# Standard: c++17
+
+# IndentWidth: 4
+# ContinuationIndentWidth: 4
+# TabWidth: 4
+# UseTab: Never
+
+# ColumnLimit: 120
+# PointerAlignment: Left
+# ReferenceAlignment: Left
+# DerivePointerAlignment: false
+
+# AlignAfterOpenBracket: Align
+# AlignConsecutiveAssignments: false
+# AlignConsecutiveDeclarations: false
+# AllowShortFunctionsOnASingleLine: Empty
+# BreakBeforeBraces: Attach
+# NamespaceIndentation: None
+# SpaceBeforeParens: ControlStatements
+# SpacesInParentheses: false
+
+# SortIncludes: CaseSensitive
+# IncludeBlocks: Preserve

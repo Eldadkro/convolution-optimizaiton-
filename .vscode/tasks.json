@@ -41,6 +41,48 @@
                 "compile-debug"
             ],
             "problemMatcher": []
+        },
+        {
+            "label": "configure-release-cuda",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-S",
+                ".",
+                "-B",
+                "build-release-cuda",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "-DKOPT_BUILD_CUDA=ON"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "compile-release-cuda",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build-release-cuda",
+                "-j"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "build-release-cuda",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "configure-release-cuda",
+                "compile-release-cuda"
+            ],
+            "problemMatcher": []
         }
     ]
 }

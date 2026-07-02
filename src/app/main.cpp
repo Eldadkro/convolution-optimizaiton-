@@ -4,10 +4,15 @@
 
 #include <chrono>
 #include <cstdlib>
+#include <cstdint>
+#include <filesystem>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <vector>
+
+#include <opencv2/core.hpp>
+#include <opencv2/imgcodecs.hpp>
 
 namespace {
 
@@ -30,17 +35,33 @@ kopt::Backend parse_backend(const std::string& value) {
 
 const char* backend_name(kopt::Backend backend) {
     switch (backend) {
-        case kopt::Backend::Auto:
-            return "auto";
-        case kopt::Backend::Cpu:
-            return "cpu";
-        case kopt::Backend::Cuda:
-            return "cuda";
+    case kopt::Backend::Auto:
+        return "auto";
+    case kopt::Backend::Cpu:
+        return "cpu";
+    case kopt::Backend::Cuda:
+        return "cuda";
     }
     return "unknown";
 }
 
-}  // namespace
+void save_lpf_image(const std::vector<std::uint8_t>& pixels, int width, int height) {
+    std::filesystem::create_directories("results");
+    const cv::Mat image(height, width, CV_8UC1, const_cast<std::uint8_t*>(pixels.data()), width);
+    if (!cv::imwrite("results/lpf.png", image, {cv::IMWRITE_PNG_COMPRESSION, 0})) {
+        throw std::runtime_error("failed to write results/lpf.png");
+    }
+}
+
+void save_hpf_image(const std::vector<std::uint8_t>& pixels, int width, int height) {
+    std::filesystem::create_directories("results");
+    const cv::Mat image(height, width, CV_8UC1, const_cast<std::uint8_t*>(pixels.data()), width);
+    if (!cv::imwrite("results/hpf.png", image, {cv::IMWRITE_PNG_COMPRESSION, 0})) {
+        throw std::runtime_error("failed to write results/hpf.png");
+    }
+}
+
+} // namespace
 
 int main(int argc, char** argv) {
     if (argc < 3 || argc > 4) {
@@ -61,8 +82,8 @@ int main(int argc, char** argv) {
         int height = 0;
         std::vector<std::uint8_t> input_pixels = kopt::read_grayscale_image_u8(image_path, width, height);
         if (width != kopt::kImageWidth || height != kopt::kImageHeight) {
-            std::cerr << "Warning: expected " << kopt::kImageWidth << "x" << kopt::kImageHeight
-                      << ", got " << width << "x" << height << "\n";
+            std::cerr << "Warning: expected " << kopt::kImageWidth << "x" << kopt::kImageHeight << ", got " << width
+                      << "x" << height << "\n";
         }
 
         std::vector<std::uint8_t> lpf_pixels(input_pixels.size());
@@ -87,6 +108,9 @@ int main(int argc, char** argv) {
         std::cout << "avg_ms=" << elapsed.count() / iterations << "\n";
         std::cout << "lpf_sample=" << static_cast<int>(lpf_pixels[lpf_pixels.size() / 2]) << "\n";
         std::cout << "hpf_sample=" << static_cast<int>(hpf_pixels[hpf_pixels.size() / 2]) << "\n";
+
+        save_lpf_image(lpf_pixels, width, height);
+        save_hpf_image(hpf_pixels, width, height);
     } catch (const std::exception& error) {
         std::cerr << "error: " << error.what() << "\n";
         return 1;

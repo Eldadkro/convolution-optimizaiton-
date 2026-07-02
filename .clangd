@@ -19,6 +19,9 @@ Diagnostics:
 Index:
   Background: Build
 
+Format:
+  Style: file
+
 ---
 If:
   PathMatch: .*\.cu
