@@ -1,0 +1,46 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "configure-debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "-S",
+                ".",
+                "-B",
+                "build-debug",
+                "-DCMAKE_BUILD_TYPE=Debug"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "compile-debug",
+            "type": "shell",
+            "command": "cmake",
+            "args": [
+                "--build",
+                "build-debug",
+                "-j"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        },
+        {
+            "label": "build-debug",
+            "dependsOrder": "sequence",
+            "dependsOn": [
+                "configure-debug",
+                "compile-debug"
+            ],
+            "problemMatcher": []
+        }
+    ]
+}

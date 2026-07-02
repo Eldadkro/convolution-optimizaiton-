@@ -1,0 +1,18 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug kopt_bench",
+            "type": "lldb",
+            "request": "launch",
+            "program": "${workspaceFolder}/build-debug/kopt_bench",
+            "args": [
+                "${workspaceFolder}/data/image.png",
+                "1",
+                "cpu"
+            ],
+            "cwd": "${workspaceFolder}",
+            "preLaunchTask": "build-debug"
+        }
+    ]
+}
