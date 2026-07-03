@@ -89,6 +89,8 @@ struct CudaConvolutionState {
 
     void run();
 
+    void run_npp_box_filter();
+
     void copy_output(MutableImageViewU8 lpf_output, MutableImageViewU8 hpf_output);
 };
 

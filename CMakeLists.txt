@@ -52,6 +52,11 @@ if(KOPT_BUILD_CUDA)
         PUBLIC
             ${CMAKE_CURRENT_SOURCE_DIR}/include
     )
+    target_link_libraries(kopt_cuda
+        PUBLIC
+            nppif
+            nppc
+    )
     set_target_properties(kopt_cuda PROPERTIES
         CUDA_SEPARABLE_COMPILATION ON
         CUDA_ARCHITECTURES native

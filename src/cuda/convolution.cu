@@ -1,6 +1,7 @@
 #include "kopt/convolution.hpp"
 
 #include <cuda_runtime.h>
+#include <nppi_filtering_functions.h>
 
 #include <algorithm>
 #include <cstddef>
@@ -63,10 +64,9 @@ __device__ std::uint8_t to_u8_device(float value) {
     return static_cast<std::uint8_t>(roundf(clamped));
 }
 
-__global__ void write_filter_outputs_kernel(const std::uint8_t* input, const Pixel* lpf, std::uint8_t* lpf_output,
+__global__ void write_filter_outputs_kernel(const std::uint8_t* input, const std::uint8_t* lpf_output,
                                             std::uint8_t* hpf_output, int width, int height,
-                                            std::ptrdiff_t input_stride_bytes, int lpf_stride,
-                                            std::ptrdiff_t lpf_output_stride_bytes,
+                                            std::ptrdiff_t input_stride_bytes, std::ptrdiff_t lpf_output_stride_bytes,
                                             std::ptrdiff_t hpf_output_stride_bytes) {
     const int x = blockIdx.x * blockDim.x + threadIdx.x;
     const int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -76,14 +76,19 @@ __global__ void write_filter_outputs_kernel(const std::uint8_t* input, const Pix
     }
 
     const float input_value = static_cast<float>(input[y * input_stride_bytes + x]);
-    const float lpf_value = lpf[y * lpf_stride + x];
-    lpf_output[y * lpf_output_stride_bytes + x] = to_u8_device(lpf_value);
+    const float lpf_value = static_cast<float>(lpf_output[y * lpf_output_stride_bytes + x]);
     hpf_output[y * hpf_output_stride_bytes + x] = to_u8_device(input_value - lpf_value + 0.5f);
 }
 
 void check_cuda(cudaError_t result, const char* operation) {
     if (result != cudaSuccess) {
         throw std::runtime_error(std::string(operation) + ": " + cudaGetErrorString(result));
+    }
+}
+
+void check_npp(NppStatus result, const char* operation) {
+    if (result < 0) {
+        throw std::runtime_error(std::string(operation) + ": NPP error " + std::to_string(result));
     }
 }
 
@@ -188,22 +193,38 @@ void CudaConvolutionState::copy_input(ImageViewU8 input) {
 }
 
 void CudaConvolutionState::run() {
-    if (device_input == nullptr || device_lpf == nullptr || device_lpf_output == nullptr ||
-        device_hpf_output == nullptr) {
+    if (device_input == nullptr || device_lpf_output == nullptr || device_hpf_output == nullptr) {
         throw std::logic_error("CUDA convolution state is not initialized");
     }
+    // const dim3 block(32, 8);
+    // const dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
+    // convolve5x5_u8_kernel<<<grid, block>>>(device_input, device_lpf, width, height, input_stride_bytes,
+    //                                        device_lpf_stride);
+    run_npp_box_filter();
 
     const dim3 block(32, 8);
     const dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
-    convolve5x5_u8_kernel<<<grid, block>>>(device_input, device_lpf, width, height, input_stride_bytes,
-                                           device_lpf_stride);
-    check_cuda(cudaGetLastError(), "convolve5x5_u8_kernel launch");
-
-    write_filter_outputs_kernel<<<grid, block>>>(device_input, device_lpf, device_lpf_output, device_hpf_output, width,
-                                                 height, input_stride_bytes, device_lpf_stride, lpf_output_stride_bytes,
-                                                 hpf_output_stride_bytes);
+    write_filter_outputs_kernel<<<grid, block>>>(device_input, device_lpf_output, device_hpf_output, width, height,
+                                                 input_stride_bytes, lpf_output_stride_bytes, hpf_output_stride_bytes);
     check_cuda(cudaGetLastError(), "write_filter_outputs_kernel launch");
     check_cuda(cudaDeviceSynchronize(), "CUDA filter kernels sync");
+}
+
+void CudaConvolutionState::run_npp_box_filter() {
+    if (device_input == nullptr || device_lpf_output == nullptr) {
+        throw std::logic_error("CUDA convolution state is not initialized");
+    }
+
+    const NppiSize source_size{width, height};
+    const NppiPoint source_offset{0, 0};
+    const NppiSize roi_size{width, height};
+    const NppiSize mask_size{kKernelSize, kKernelSize};
+    const NppiPoint anchor{kKernelRadius, kKernelRadius};
+
+    check_npp(nppiFilterBoxBorder_8u_C1R(device_input, static_cast<Npp32s>(input_stride_bytes), source_size,
+                                         source_offset, device_lpf_output, static_cast<Npp32s>(lpf_output_stride_bytes),
+                                         roi_size, mask_size, anchor, NPP_BORDER_REPLICATE),
+              "nppiFilterBoxBorder_8u_C1R");
 }
 
 void CudaConvolutionState::copy_output(MutableImageViewU8 lpf_output, MutableImageViewU8 hpf_output) {
