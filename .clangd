@@ -3,6 +3,7 @@ CompileFlags:
   Add:
     - -std=c++17
     - -I/home/eldadk/projects/kernel-optimization/include
+    - -DKOPT_WITH_CUDA=1
   Remove:
     - -W*
 

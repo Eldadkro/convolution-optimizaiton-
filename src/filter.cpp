@@ -58,7 +58,7 @@ class FilterEngine::Impl {
   public:
     virtual ~Impl() = default;
 
-    void setup(int width, int height) {
+    virtual void setup(int width, int height) {
         if (width <= 0 || height <= 0) {
             throw std::invalid_argument("setup dimensions must be positive");
         }
@@ -156,16 +156,28 @@ class CpuImpl final : public FilterEngine::Impl {
 #if KOPT_WITH_CUDA
 class CudaImpl final : public FilterEngine::Impl {
   public:
+    void setup(int width, int height) override {
+        cuda_state_.release();
+        FilterEngine::Impl::setup(width, height);
+        const ImageViewU8 input{nullptr, width, height, width};
+        const MutableImageViewU8 lpf_output{nullptr, width, height, width};
+        const MutableImageViewU8 hpf_output{nullptr, width, height, width};
+        cuda_state_.setup(input, lpf_output, hpf_output, kDefaultKernel);
+    }
+
     void run(ImageViewU8 input, MutableImageViewU8 lpf_output, MutableImageViewU8 hpf_output) override {
         prepare_run(input, lpf_output, hpf_output);
-        copy_input(input);
-        convolve5x5_cuda(input_view(), lpf_view(), kDefaultKernel);
-        write_outputs(input, lpf_output, hpf_output);
+        cuda_state_.copy_input(input);
+        cuda_state_.run();
+        cuda_state_.copy_output(lpf_output, hpf_output);
     }
 
     [[nodiscard]] Backend active_backend() const noexcept override {
         return Backend::Cuda;
     }
+
+  private:
+    CudaConvolutionState cuda_state_;
 };
 #endif
 

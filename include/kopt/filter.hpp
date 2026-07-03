@@ -1,26 +1,12 @@
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
+#include "kopt/convolution.hpp"
+
 #include <memory>
 
 namespace kopt {
 
 enum class Backend { Auto, Cpu, Cuda };
-
-struct ImageViewU8 {
-  const std::uint8_t *data = nullptr;
-  int width = 0;
-  int height = 0;
-  std::ptrdiff_t stride_bytes = 0;
-};
-
-struct MutableImageViewU8 {
-  std::uint8_t *data = nullptr;
-  int width = 0;
-  int height = 0;
-  std::ptrdiff_t stride_bytes = 0;
-};
 
 struct FilterConfig {
   Backend backend = Backend::Auto;
