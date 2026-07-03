@@ -2,6 +2,8 @@
 
 Minimal CMake project for benchmarking a 5x5 convolution on 1024x2048 images.
 
+for full detail on the work checkout [Full detail](docs/README.md)
+
 ## Components
 
 - `kopt_cpu`: native C++ 5x5 convolution.

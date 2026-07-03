@@ -143,7 +143,10 @@ class CpuImpl final : public FilterEngine::Impl {
     void run(ImageViewU8 input, MutableImageViewU8 lpf_output, MutableImageViewU8 hpf_output) override {
         prepare_run(input, lpf_output, hpf_output);
         copy_input(input);
+        // convolve5x5_cpu(input_view(), lpf_view(), kBoxKernel);
         // convolve5x5_cpu_opencv(input_view(), lpf_view(), kBoxKernel);
+        // convolve5x5_box_cpu(input_view(), lpf_view());
+        // convolve5x5_box_cpu_opencv_integral(input_view(), lpf_view());
         convolve5x5_box_cpu_opencv_separable(input_view(), lpf_view());
         write_outputs(input, lpf_output, hpf_output);
     }
