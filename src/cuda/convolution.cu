@@ -3,8 +3,8 @@
 #include <cuda_runtime.h>
 
 #include <algorithm>
-#include <cstdint>
 #include <cstddef>
+#include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -14,11 +14,7 @@ namespace {
 
 __constant__ float kDeviceKernel[25];
 
-__global__ void convolve5x5_kernel(const Pixel* input,
-                                   Pixel* output,
-                                   int width,
-                                   int height,
-                                   int input_stride,
+__global__ void convolve5x5_kernel(const Pixel* input, Pixel* output, int width, int height, int input_stride,
                                    int output_stride) {
     const int x = blockIdx.x * blockDim.x + threadIdx.x;
     const int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -40,12 +36,8 @@ __global__ void convolve5x5_kernel(const Pixel* input,
     output[y * output_stride + x] = sum;
 }
 
-__global__ void convolve5x5_u8_kernel(const std::uint8_t* input,
-                                      Pixel* lpf,
-                                      int width,
-                                      int height,
-                                      std::ptrdiff_t input_stride_bytes,
-                                      int lpf_stride) {
+__global__ void convolve5x5_u8_kernel(const std::uint8_t* input, Pixel* lpf, int width, int height,
+                                      std::ptrdiff_t input_stride_bytes, int lpf_stride) {
     const int x = blockIdx.x * blockDim.x + threadIdx.x;
     const int y = blockIdx.y * blockDim.y + threadIdx.y;
 
@@ -71,14 +63,9 @@ __device__ std::uint8_t to_u8_device(float value) {
     return static_cast<std::uint8_t>(roundf(clamped));
 }
 
-__global__ void write_filter_outputs_kernel(const std::uint8_t* input,
-                                            const Pixel* lpf,
-                                            std::uint8_t* lpf_output,
-                                            std::uint8_t* hpf_output,
-                                            int width,
-                                            int height,
-                                            std::ptrdiff_t input_stride_bytes,
-                                            int lpf_stride,
+__global__ void write_filter_outputs_kernel(const std::uint8_t* input, const Pixel* lpf, std::uint8_t* lpf_output,
+                                            std::uint8_t* hpf_output, int width, int height,
+                                            std::ptrdiff_t input_stride_bytes, int lpf_stride,
                                             std::ptrdiff_t lpf_output_stride_bytes,
                                             std::ptrdiff_t hpf_output_stride_bytes) {
     const int x = blockIdx.x * blockDim.x + threadIdx.x;
@@ -100,7 +87,7 @@ void check_cuda(cudaError_t result, const char* operation) {
     }
 }
 
-}  // namespace
+} // namespace
 
 CudaConvolutionState::~CudaConvolutionState() {
     release();
@@ -133,9 +120,7 @@ CudaConvolutionState& CudaConvolutionState::operator=(CudaConvolutionState&& oth
     return *this;
 }
 
-void CudaConvolutionState::setup(ImageViewU8 input,
-                                 MutableImageViewU8 lpf_output,
-                                 MutableImageViewU8 hpf_output,
+void CudaConvolutionState::setup(ImageViewU8 input, MutableImageViewU8 lpf_output, MutableImageViewU8 hpf_output,
                                  const float kernel[25]) {
     release();
     width = input.width;
@@ -210,23 +195,12 @@ void CudaConvolutionState::run() {
 
     const dim3 block(32, 8);
     const dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
-    convolve5x5_u8_kernel<<<grid, block>>>(device_input,
-                                           device_lpf,
-                                           width,
-                                           height,
-                                           input_stride_bytes,
+    convolve5x5_u8_kernel<<<grid, block>>>(device_input, device_lpf, width, height, input_stride_bytes,
                                            device_lpf_stride);
     check_cuda(cudaGetLastError(), "convolve5x5_u8_kernel launch");
 
-    write_filter_outputs_kernel<<<grid, block>>>(device_input,
-                                                 device_lpf,
-                                                 device_lpf_output,
-                                                 device_hpf_output,
-                                                 width,
-                                                 height,
-                                                 input_stride_bytes,
-                                                 device_lpf_stride,
-                                                 lpf_output_stride_bytes,
+    write_filter_outputs_kernel<<<grid, block>>>(device_input, device_lpf, device_lpf_output, device_hpf_output, width,
+                                                 height, input_stride_bytes, device_lpf_stride, lpf_output_stride_bytes,
                                                  hpf_output_stride_bytes);
     check_cuda(cudaGetLastError(), "write_filter_outputs_kernel launch");
     check_cuda(cudaDeviceSynchronize(), "CUDA filter kernels sync");
@@ -248,34 +222,4 @@ void CudaConvolutionState::copy_output(MutableImageViewU8 lpf_output, MutableIma
                "cudaMemcpy hpf output");
 }
 
-void convolve5x5_cuda(ConstImageView input, ImageView output, const float kernel[25]) {
-    const std::size_t input_bytes = static_cast<std::size_t>(input.stride) * input.height * sizeof(Pixel);
-    const std::size_t output_bytes = static_cast<std::size_t>(output.stride) * output.height * sizeof(Pixel);
-
-    Pixel* device_input = nullptr;
-    Pixel* device_output = nullptr;
-
-    check_cuda(cudaMalloc(&device_input, input_bytes), "cudaMalloc input");
-    check_cuda(cudaMalloc(&device_output, output_bytes), "cudaMalloc output");
-
-    check_cuda(cudaMemcpy(device_input, input.data, input_bytes, cudaMemcpyHostToDevice), "cudaMemcpy input");
-    check_cuda(cudaMemcpyToSymbol(kDeviceKernel, kernel, 25 * sizeof(float)), "cudaMemcpyToSymbol kernel");
-
-    const dim3 block(32, 8);
-    const dim3 grid((input.width + block.x - 1) / block.x, (input.height + block.y - 1) / block.y);
-    convolve5x5_kernel<<<grid, block>>>(device_input,
-                                        device_output,
-                                        input.width,
-                                        input.height,
-                                        input.stride,
-                                        output.stride);
-    check_cuda(cudaGetLastError(), "convolve5x5_kernel launch");
-    check_cuda(cudaDeviceSynchronize(), "convolve5x5_kernel sync");
-
-    check_cuda(cudaMemcpy(output.data, device_output, output_bytes, cudaMemcpyDeviceToHost), "cudaMemcpy output");
-
-    cudaFree(device_output);
-    cudaFree(device_input);
-}
-
-}  // namespace kopt
+} // namespace kopt

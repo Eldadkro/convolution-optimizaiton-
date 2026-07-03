@@ -92,6 +92,5 @@ struct CudaConvolutionState {
     void copy_output(MutableImageViewU8 lpf_output, MutableImageViewU8 hpf_output);
 };
 
-void convolve5x5_cuda(ConstImageView input, ImageView output, const float kernel[25]);
 
 }  // namespace kopt
