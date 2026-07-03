@@ -61,6 +61,7 @@ struct CudaConvolutionState {
     Pixel* device_lpf = nullptr;
     std::uint8_t* device_lpf_output = nullptr;
     std::uint8_t* device_hpf_output = nullptr;
+    void* stream = nullptr;
     int width = 0;
     int height = 0;
     std::ptrdiff_t input_stride_bytes = 0;

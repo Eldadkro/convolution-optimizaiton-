@@ -1,6 +1,7 @@
 #include "kopt/convolution.hpp"
 
 #include <cuda_runtime.h>
+#include <nppcore.h>
 #include <nppi_filtering_functions.h>
 
 #include <algorithm>
@@ -112,6 +113,7 @@ CudaConvolutionState& CudaConvolutionState::operator=(CudaConvolutionState&& oth
     device_lpf = std::exchange(other.device_lpf, nullptr);
     device_lpf_output = std::exchange(other.device_lpf_output, nullptr);
     device_hpf_output = std::exchange(other.device_hpf_output, nullptr);
+    stream = std::exchange(other.stream, nullptr);
     width = std::exchange(other.width, 0);
     height = std::exchange(other.height, 0);
     input_stride_bytes = std::exchange(other.input_stride_bytes, 0);
@@ -140,6 +142,7 @@ void CudaConvolutionState::setup(ImageViewU8 input, MutableImageViewU8 lpf_outpu
     hpf_output_bytes = static_cast<std::size_t>(hpf_output.stride_bytes) * hpf_output.height;
 
     try {
+        check_cuda(cudaStreamCreate(reinterpret_cast<cudaStream_t*>(&stream)), "cudaStreamCreate");
         check_cuda(cudaMalloc(&device_input, input_bytes), "cudaMalloc input");
         check_cuda(cudaMalloc(&device_lpf, device_lpf_bytes), "cudaMalloc lpf");
         check_cuda(cudaMalloc(&device_lpf_output, lpf_output_bytes), "cudaMalloc lpf output");
@@ -149,10 +152,16 @@ void CudaConvolutionState::setup(ImageViewU8 input, MutableImageViewU8 lpf_outpu
         throw;
     }
 
-    check_cuda(cudaMemcpyToSymbol(kDeviceKernel, kernel, 25 * sizeof(float)), "cudaMemcpyToSymbol kernel");
+    check_cuda(cudaMemcpyToSymbolAsync(kDeviceKernel, kernel, 25 * sizeof(float), 0, cudaMemcpyHostToDevice,
+                                       reinterpret_cast<cudaStream_t>(stream)),
+               "cudaMemcpyToSymbol kernel");
 }
 
 void CudaConvolutionState::release() noexcept {
+    const auto cuda_stream = reinterpret_cast<cudaStream_t>(stream);
+    if (cuda_stream != nullptr) {
+        cudaStreamSynchronize(cuda_stream);
+    }
     if (device_hpf_output != nullptr) {
         cudaFree(device_hpf_output);
     }
@@ -165,10 +174,14 @@ void CudaConvolutionState::release() noexcept {
     if (device_input != nullptr) {
         cudaFree(device_input);
     }
+    if (cuda_stream != nullptr) {
+        cudaStreamDestroy(cuda_stream);
+    }
     device_input = nullptr;
     device_lpf = nullptr;
     device_lpf_output = nullptr;
     device_hpf_output = nullptr;
+    stream = nullptr;
     width = 0;
     height = 0;
     input_stride_bytes = 0;
@@ -189,7 +202,9 @@ void CudaConvolutionState::copy_input(ImageViewU8 input) {
         throw std::invalid_argument("CUDA input view does not match allocated state");
     }
 
-    check_cuda(cudaMemcpy(device_input, input.data, input_bytes, cudaMemcpyHostToDevice), "cudaMemcpy input");
+    check_cuda(cudaMemcpyAsync(device_input, input.data, input_bytes, cudaMemcpyHostToDevice,
+                               reinterpret_cast<cudaStream_t>(stream)),
+               "cudaMemcpy input");
 }
 
 void CudaConvolutionState::run() {
@@ -204,10 +219,11 @@ void CudaConvolutionState::run() {
 
     const dim3 block(32, 8);
     const dim3 grid((width + block.x - 1) / block.x, (height + block.y - 1) / block.y);
-    write_filter_outputs_kernel<<<grid, block>>>(device_input, device_lpf_output, device_hpf_output, width, height,
-                                                 input_stride_bytes, lpf_output_stride_bytes, hpf_output_stride_bytes);
+    write_filter_outputs_kernel<<<grid, block, 0, reinterpret_cast<cudaStream_t>(stream)>>>(
+        device_input, device_lpf_output, device_hpf_output, width, height, input_stride_bytes, lpf_output_stride_bytes,
+        hpf_output_stride_bytes);
     check_cuda(cudaGetLastError(), "write_filter_outputs_kernel launch");
-    check_cuda(cudaDeviceSynchronize(), "CUDA filter kernels sync");
+    check_cuda(cudaStreamSynchronize(reinterpret_cast<cudaStream_t>(stream)), "CUDA filter kernels sync");
 }
 
 void CudaConvolutionState::run_npp_box_filter() {
@@ -221,9 +237,14 @@ void CudaConvolutionState::run_npp_box_filter() {
     const NppiSize mask_size{kKernelSize, kKernelSize};
     const NppiPoint anchor{kKernelRadius, kKernelRadius};
 
-    check_npp(nppiFilterBoxBorder_8u_C1R(device_input, static_cast<Npp32s>(input_stride_bytes), source_size,
-                                         source_offset, device_lpf_output, static_cast<Npp32s>(lpf_output_stride_bytes),
-                                         roi_size, mask_size, anchor, NPP_BORDER_REPLICATE),
+    NppStreamContext stream_context;
+    check_npp(nppGetStreamContext(&stream_context), "nppGetStreamContext");
+    stream_context.hStream = reinterpret_cast<cudaStream_t>(stream);
+
+    check_npp(nppiFilterBoxBorder_8u_C1R_Ctx(device_input, static_cast<Npp32s>(input_stride_bytes), source_size,
+                                             source_offset, device_lpf_output,
+                                             static_cast<Npp32s>(lpf_output_stride_bytes), roi_size, mask_size, anchor,
+                                             NPP_BORDER_REPLICATE, stream_context),
               "nppiFilterBoxBorder_8u_C1R");
 }
 
@@ -237,10 +258,13 @@ void CudaConvolutionState::copy_output(MutableImageViewU8 lpf_output, MutableIma
         throw std::invalid_argument("CUDA output views do not match allocated state");
     }
 
-    check_cuda(cudaMemcpy(lpf_output.data, device_lpf_output, lpf_output_bytes, cudaMemcpyDeviceToHost),
+    check_cuda(cudaMemcpyAsync(lpf_output.data, device_lpf_output, lpf_output_bytes, cudaMemcpyDeviceToHost,
+                               reinterpret_cast<cudaStream_t>(stream)),
                "cudaMemcpy lpf output");
-    check_cuda(cudaMemcpy(hpf_output.data, device_hpf_output, hpf_output_bytes, cudaMemcpyDeviceToHost),
+    check_cuda(cudaMemcpyAsync(hpf_output.data, device_hpf_output, hpf_output_bytes, cudaMemcpyDeviceToHost,
+                               reinterpret_cast<cudaStream_t>(stream)),
                "cudaMemcpy hpf output");
+    check_cuda(cudaStreamSynchronize(reinterpret_cast<cudaStream_t>(stream)), "cudaMemcpy output sync");
 }
 
 } // namespace kopt
